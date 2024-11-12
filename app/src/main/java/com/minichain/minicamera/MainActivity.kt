@@ -17,14 +17,13 @@ class MainActivity : ComponentActivity() {
     Log.d("MAIN_ACTIVITY", "Main Activity onCreate")
     super.onCreate(savedInstanceState)
     startMainService()
-    val mainViewModel = MainViewModel(applicationContext)
     enableEdgeToEdge()
     setContent {
       MiniCameraTheme {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-          CameraPreview(
+          CameraPageContent(
             modifier = Modifier.padding(innerPadding),
-            viewModel = mainViewModel
+            applicationContext = applicationContext
           )
         }
       }

@@ -1,13 +1,13 @@
 package com.minichain.minicamera
 
 import android.content.Context
-import android.graphics.SurfaceTexture
 import android.util.Log
-import android.view.TextureView
-import android.view.TextureView.SurfaceTextureListener
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -17,46 +17,56 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
-fun CameraPreview(
+fun CameraPageContent(
   modifier: Modifier,
-  viewModel: MainViewModel
+  applicationContext: Context
 ) {
   Log.d("CAMERA_PREVIEW", "Composable created")
+  val viewModel = MainViewModel(applicationContext)
   Box(
-    modifier = Modifier.fillMaxSize()
+    modifier = modifier.fillMaxSize()
   ) {
-    val context = LocalContext.current
-    val cameraPreview by viewModel.cameraPreview.collectAsStateWithLifecycle()
-    cameraPreview?.let { cameraPreviewNotNull ->
-      AndroidView(
-        factory = {
-          CustomTextureView(context).apply {
-            setSurfaceTexture(cameraPreviewNotNull)
-          }
-        }
-      )
-    }
+    CameraPreview(
+      viewModel = viewModel
+    )
+    StartStopButton(
+      viewModel = viewModel,
+      modifier = Modifier.align(Alignment.BottomCenter)
+    )
   }
 }
 
-class CustomTextureView(context: Context) : TextureView(context) {
-  init {
-    surfaceTextureListener = object : SurfaceTextureListener {
-      override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-
+@Composable
+fun CameraPreview(
+  viewModel: MainViewModel
+) {
+  val context = LocalContext.current
+  val cameraPreview by viewModel.cameraPreviewStateFlow.collectAsStateWithLifecycle()
+  cameraPreview?.let { cameraPreviewNotNull ->
+    AndroidView(
+      factory = {
+        CustomTextureView(context).apply {
+          setSurfaceTexture(cameraPreviewNotNull)
+        }
       }
+    )
+  }
+}
 
-      override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-
-      }
-
-      override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-        return false
-      }
-
-      override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
-
-      }
+@Composable
+fun StartStopButton(
+  viewModel: MainViewModel,
+  modifier: Modifier
+) {
+  FloatingActionButton(
+    modifier = modifier,
+    onClick = {
+      Log.d("MAIN_ACTIVITY", "Start/Stop button clicked")
     }
+  ) {
+    Icon(
+      imageVector = Icons.Default.PlayArrow,
+      contentDescription = ""
+    )
   }
 }

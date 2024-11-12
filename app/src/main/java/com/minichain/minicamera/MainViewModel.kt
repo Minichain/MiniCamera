@@ -10,14 +10,16 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(applicationContext: Context) : ViewModel() {
 
-  val cameraPreview = MutableStateFlow<SurfaceTexture?>(null)
+  val cameraPreviewStateFlow = MutableStateFlow<SurfaceTexture?>(null)
 
   init {
     viewModelScope.launch {
-      cameraPreview.emit((applicationContext as App).cameraPreview)
-//      (applicationContext as App).cameraPreview.setOnFrameAvailableListener {
-//        Log.d("CAMERA_PREVIEW", "Camera preview on frame available")
-//      }
+      (applicationContext as App).cameraPreview.let { cameraPreview ->
+        cameraPreviewStateFlow.emit(cameraPreview)
+        cameraPreview.setOnFrameAvailableListener {
+          Log.d("CAMERA_PREVIEW", "Camera preview on frame available")
+        }
+      }
     }
   }
 }

@@ -6,16 +6,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.graphics.ImageFormat
-import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.params.OutputConfiguration
-import android.hardware.camera2.params.SessionConfiguration
-import android.media.ImageReader
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
@@ -25,7 +21,6 @@ import android.view.Surface
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import java.util.concurrent.Executor
 
 class MainService : Service() {
 
@@ -55,6 +50,11 @@ class MainService : Service() {
 
     startForeground()
 
+
+    openCameraAndStartCapturing()
+  }
+
+  private fun openCameraAndStartCapturing() {
     val cameraManager: CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
     cameraManager.getBackCameraId()?.let { backCameraId ->
       val cameraStateCallback = object : CameraDevice.StateCallback() {
@@ -81,7 +81,6 @@ class MainService : Service() {
   private fun createCaptureSession(camera: CameraDevice) {
     Log.d("MAIN_SERVICE", "Let's create capture session")
     val cameraPreview = (application as App).cameraPreview
-//    val cameraPreview = SurfaceTexture(false)
     val surface = Surface(cameraPreview)
     Log.d("MAIN_SERVICE", "Is App.cameraPreview released? ${cameraPreview.isReleased}")
     Log.d("MAIN_SERVICE", "Is surface valid? ${surface.isValid}")
@@ -119,9 +118,6 @@ class MainService : Service() {
       outputConfigurations.add(config)
     }
 
-
-
-
     Log.d("MAIN_SERVICE", "Creating capture session...")
     camera.createCaptureSession(
       surfaceTargets,
@@ -136,7 +132,6 @@ class MainService : Service() {
 //    )
 //    camera.createCaptureSession(sessionConfiguration)
     Log.d("MAIN_SERVICE", "Capture session created!")
-
   }
 
   private fun CameraManager.getBackCameraId(): String? {
