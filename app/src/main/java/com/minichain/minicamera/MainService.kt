@@ -6,12 +6,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.graphics.ImageFormat
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CameraMetadata
+import android.hardware.camera2.params.OutputConfiguration
 import android.hardware.camera2.params.SessionConfiguration
+import android.media.ImageReader
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -20,6 +25,7 @@ import android.view.Surface
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import java.util.concurrent.Executor
 
 class MainService : Service() {
 
@@ -54,25 +60,7 @@ class MainService : Service() {
       val cameraStateCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(camera: CameraDevice) {
           Log.d("MAIN_SERVICE", "Camera opened")
-
-          val surfaceTexture = SurfaceTexture(false)
-          val surface = Surface(surfaceTexture)
-
-//          camera.createCaptureSession(
-//            SessionConfiguration(
-//              listOf(surface),
-//              object : CameraCaptureSession.StateCallback() {
-//                override fun onConfigured(session: CameraCaptureSession) {
-//
-//                }
-//
-//                override fun onConfigureFailed(session: CameraCaptureSession) {
-//
-//                }
-//              },
-//              backgroundHandler
-//            )
-//          )
+          createCaptureSession(camera)
         }
 
         override fun onDisconnected(camera: CameraDevice) {
@@ -88,6 +76,67 @@ class MainService : Service() {
         cameraManager.openCamera(backCameraId, cameraStateCallback, backgroundHandler)
       }
     }
+  }
+
+  private fun createCaptureSession(camera: CameraDevice) {
+    Log.d("MAIN_SERVICE", "Let's create capture session")
+    val cameraPreview = (application as App).cameraPreview
+//    val cameraPreview = SurfaceTexture(false)
+    val surface = Surface(cameraPreview)
+    Log.d("MAIN_SERVICE", "Is App.cameraPreview released? ${cameraPreview.isReleased}")
+    Log.d("MAIN_SERVICE", "Is surface valid? ${surface.isValid}")
+    val surfaceTargets = listOf(surface)
+
+    val cameraCaptureSessionCallback = object : CameraCaptureSession.StateCallback() {
+      override fun onConfigured(session: CameraCaptureSession) {
+        Log.d("MAIN_SERVICE", "Camera capture session configured!")
+        val captureRequest = session.device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+        captureRequest.addTarget(surface)
+        session.setRepeatingRequest(captureRequest.build(), null, null)
+      }
+
+      override fun onConfigureFailed(session: CameraCaptureSession) {
+        Log.d("MAIN_SERVICE", "Camera capture session configuration failed :(")
+      }
+
+      override fun onClosed(session: CameraCaptureSession) {
+        super.onClosed(session)
+        Log.d("MAIN_SERVICE", "Camera capture session closed")
+      }
+
+      override fun onSurfacePrepared(session: CameraCaptureSession, surface: Surface) {
+        super.onSurfacePrepared(session, surface)
+        Log.d("MAIN_SERVICE", "Camera capture session surface prepared")
+      }
+    }
+
+    val outputConfigurations = mutableListOf<OutputConfiguration>()
+    surfaceTargets.forEach {
+      val config = OutputConfiguration(it)
+      if (Build.VERSION.SDK_INT == Build.VERSION_CODES.TIRAMISU) {
+        config.streamUseCase = CameraMetadata.SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT.toLong()
+      }
+      outputConfigurations.add(config)
+    }
+
+
+
+
+    Log.d("MAIN_SERVICE", "Creating capture session...")
+    camera.createCaptureSession(
+      surfaceTargets,
+      cameraCaptureSessionCallback,
+      null
+    )
+//    val sessionConfiguration = SessionConfiguration(
+//      SessionConfiguration.SESSION_REGULAR,
+//      outputConfigurations,
+//      { Log.d("MAIN_SERVICE", "Camera session executor") },
+//      cameraCaptureSessionCallback
+//    )
+//    camera.createCaptureSession(sessionConfiguration)
+    Log.d("MAIN_SERVICE", "Capture session created!")
+
   }
 
   private fun CameraManager.getBackCameraId(): String? {

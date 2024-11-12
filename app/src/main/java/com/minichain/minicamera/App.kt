@@ -4,9 +4,13 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.graphics.SurfaceTexture
 import android.util.Log
 
 class App : Application() {
+
+  val cameraPreview: SurfaceTexture = SurfaceTexture(false)
+
   override fun onCreate() {
     Log.d("APP", "Application running...")
     super.onCreate()
