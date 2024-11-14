@@ -59,6 +59,9 @@ dependencies {
 
   implementation("androidx.camera:camera-camera2:1.4.0")
   implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+  implementation("com.amplifyframework:aws-auth-cognito:1.6.4")
+//  implementation("com.amplifyframework:aws-api:1.16.13")
+  implementation(project(":aws-android-sdk-kinesisvideo"))
 
   testImplementation(libs.junit)
   androidTestImplementation(libs.androidx.junit)

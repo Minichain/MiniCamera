@@ -26,32 +26,30 @@ import android.view.Surface
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.amazonaws.kinesisvideo.client.KinesisVideoClient
+import com.amazonaws.mobile.client.AWSMobileClient
+import com.amazonaws.mobileconnectors.kinesisvideo.client.CustomKinesisVideoAndroidClientFactory
+import com.amazonaws.regions.Regions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 
 class MainService : Service() {
 
   private lateinit var backgroundHandlerThread: HandlerThread
   private lateinit var backgroundHandler: Handler
-  private val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+  private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
   private var camera: CameraDevice? = null
   private var session: CameraCaptureSession? = null
   private var imageReader: ImageReader = ImageReader.newInstance(
     App.VIDEO_RESOLUTION.width, App.VIDEO_RESOLUTION.height, ImageFormat.YUV_420_888, 1
-  ).apply {
-    setOnImageAvailableListener(
-      {
-        val frame = it.acquireLatestImage()
-        Log.d("MAIN_SERVICE", "Frame available!")
-        frame.close()
-      },
-      null
-    )
-  }
+  )
+
+  private var kinesisVideoClient: KinesisVideoClient? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
@@ -74,7 +72,16 @@ class MainService : Service() {
     backgroundHandler = Handler(backgroundHandlerThread.looper)
 
     startForeground()
+
     coroutineScope.startListeningToStartStopVideoRequests()
+
+    coroutineScope.launch {
+      kinesisVideoClient = CustomKinesisVideoAndroidClientFactory.createKinesisVideoClient(
+        application,
+        Regions.EU_WEST_1,
+        AWSMobileClient.getInstance() //TODO <- This can be done differently
+      )
+    }
   }
 
   private fun CoroutineScope.startListeningToStartStopVideoRequests() {
@@ -98,6 +105,16 @@ class MainService : Service() {
   private fun openCameraAndStartSession() {
     val cameraManager: CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
     cameraManager.addAvailabilityCallback()
+    imageReader.apply {
+      setOnImageAvailableListener(
+        {
+          val frame = it.acquireLatestImage()
+          Log.d("MAIN_SERVICE", "Frame available!")
+          frame.close()
+        },
+        backgroundHandler
+      )
+    }
     cameraManager.getBackCameraId()?.let { backCameraId ->
       val cameraStateCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(camera: CameraDevice) {
