@@ -6,10 +6,19 @@ import android.app.NotificationManager
 import android.content.Context
 import android.graphics.SurfaceTexture
 import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class App : Application() {
 
-  val cameraPreview: SurfaceTexture = SurfaceTexture(false)
+  companion object {
+    val VIDEO_RESOLUTION = VideoResolution.RESOLUTION_640_480
+  }
+
+  val cameraPreview: SurfaceTexture = SurfaceTexture(false).apply {
+    setDefaultBufferSize(VIDEO_RESOLUTION.width, VIDEO_RESOLUTION.height)
+  }
+
+  val videoStatus = MutableStateFlow(VideoStatus.Stopped)
 
   override fun onCreate() {
     Log.d("APP", "Application running...")

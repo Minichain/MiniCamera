@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- USB CAMERA -->
+  <usb-device vendor-id="7119" product-id="8836" />   <!-- NEXIGO -->
+  <usb-device vendor-id="1133" product-id="2140" />   <!-- LOGI HD 1080P -->
+  <usb-device vendor-id="1008" product-id="57863" />  <!-- HP WEBCAM HD 2300 -->
+</resources>

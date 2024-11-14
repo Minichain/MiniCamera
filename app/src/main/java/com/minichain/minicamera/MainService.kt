@@ -6,27 +6,52 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.graphics.ImageFormat
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
+import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.params.OutputConfiguration
+import android.hardware.camera2.params.SessionConfiguration
+import android.media.ImageReader
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.util.Log
+import android.util.Range
 import android.view.Surface
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 class MainService : Service() {
 
   private lateinit var backgroundHandlerThread: HandlerThread
   private lateinit var backgroundHandler: Handler
+  private val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
+  private var camera: CameraDevice? = null
+  private var session: CameraCaptureSession? = null
+  private var imageReader: ImageReader = ImageReader.newInstance(
+    App.VIDEO_RESOLUTION.width, App.VIDEO_RESOLUTION.height, ImageFormat.YUV_420_888, 1
+  ).apply {
+    setOnImageAvailableListener(
+      {
+        val frame = it.acquireLatestImage()
+        Log.d("MAIN_SERVICE", "Frame available!")
+        frame.close()
+      },
+      null
+    )
+  }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
@@ -49,18 +74,36 @@ class MainService : Service() {
     backgroundHandler = Handler(backgroundHandlerThread.looper)
 
     startForeground()
-
-
-    openCameraAndStartCapturing()
+    coroutineScope.startListeningToStartStopVideoRequests()
   }
 
-  private fun openCameraAndStartCapturing() {
+  private fun CoroutineScope.startListeningToStartStopVideoRequests() {
+    (application as App).videoStatus
+      .onEach { status ->
+        when (status) {
+          VideoStatus.Starting -> openCameraAndStartSession()
+          VideoStatus.Stopping -> stopSessionAndCloseCamera()
+          else -> { /* Nothing */ }
+        }
+      }
+      .launchIn(this)
+  }
+
+  private fun stopSessionAndCloseCamera() {
+    session?.close()
+    camera?.close()
+    (application as App).videoStatus.tryEmit(VideoStatus.Stopped)
+  }
+
+  private fun openCameraAndStartSession() {
     val cameraManager: CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    cameraManager.addAvailabilityCallback()
     cameraManager.getBackCameraId()?.let { backCameraId ->
       val cameraStateCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(camera: CameraDevice) {
           Log.d("MAIN_SERVICE", "Camera opened")
-          createCaptureSession(camera)
+          this@MainService.camera = camera
+          createCaptureSession()
         }
 
         override fun onDisconnected(camera: CameraDevice) {
@@ -78,20 +121,22 @@ class MainService : Service() {
     }
   }
 
-  private fun createCaptureSession(camera: CameraDevice) {
+  private fun createCaptureSession() {
     Log.d("MAIN_SERVICE", "Let's create capture session")
-    val cameraPreview = (application as App).cameraPreview
-    val surface = Surface(cameraPreview)
-    Log.d("MAIN_SERVICE", "Is App.cameraPreview released? ${cameraPreview.isReleased}")
-    Log.d("MAIN_SERVICE", "Is surface valid? ${surface.isValid}")
-    val surfaceTargets = listOf(surface)
+    val surface1 = Surface((application as App).cameraPreview)
+    val surface2 = imageReader.surface
+    val surfaceTargets = listOf(surface1, surface2)
 
     val cameraCaptureSessionCallback = object : CameraCaptureSession.StateCallback() {
       override fun onConfigured(session: CameraCaptureSession) {
         Log.d("MAIN_SERVICE", "Camera capture session configured!")
-        val captureRequest = session.device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-        captureRequest.addTarget(surface)
+        this@MainService.session = session
+        val captureRequest = session.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
+        captureRequest.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(24, 24))
+        captureRequest.addTarget(surface1)
+        captureRequest.addTarget(surface2)
         session.setRepeatingRequest(captureRequest.build(), null, null)
+        (application as App).videoStatus.tryEmit(VideoStatus.Started)
       }
 
       override fun onConfigureFailed(session: CameraCaptureSession) {
@@ -109,29 +154,40 @@ class MainService : Service() {
       }
     }
 
-    val outputConfigurations = mutableListOf<OutputConfiguration>()
-    surfaceTargets.forEach {
-      val config = OutputConfiguration(it)
-      if (Build.VERSION.SDK_INT == Build.VERSION_CODES.TIRAMISU) {
-        config.streamUseCase = CameraMetadata.SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT.toLong()
-      }
-      outputConfigurations.add(config)
-    }
-
     Log.d("MAIN_SERVICE", "Creating capture session...")
-    camera.createCaptureSession(
-      surfaceTargets,
-      cameraCaptureSessionCallback,
-      null
-    )
-//    val sessionConfiguration = SessionConfiguration(
-//      SessionConfiguration.SESSION_REGULAR,
-//      outputConfigurations,
-//      { Log.d("MAIN_SERVICE", "Camera session executor") },
-//      cameraCaptureSessionCallback
-//    )
-//    camera.createCaptureSession(sessionConfiguration)
-    Log.d("MAIN_SERVICE", "Capture session created!")
+    camera?.createCaptureSession(surfaceTargets, cameraCaptureSessionCallback)
+  }
+
+  private fun CameraDevice.createCaptureSession(
+    surfaceTargets: List<Surface>,
+    cameraCaptureSessionCallback: CameraCaptureSession.StateCallback
+  ) {
+    val useOldApproach = true
+    if (useOldApproach) {
+      /** Old approach **/
+      createCaptureSession(
+        surfaceTargets,
+        cameraCaptureSessionCallback,
+        null
+      )
+    } else {
+      /** New approach **/
+      val outputConfigurations = mutableListOf<OutputConfiguration>()
+      surfaceTargets.forEach {
+        val config = OutputConfiguration(it)
+        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.TIRAMISU) {
+          config.streamUseCase = CameraMetadata.SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT.toLong()
+        }
+        outputConfigurations.add(config)
+      }
+      val sessionConfiguration = SessionConfiguration(
+        SessionConfiguration.SESSION_REGULAR,
+        outputConfigurations,
+        { Log.d("MAIN_SERVICE", "Camera session executor") },
+        cameraCaptureSessionCallback
+      )
+      createCaptureSession(sessionConfiguration)
+    }
   }
 
   private fun CameraManager.getBackCameraId(): String? {
@@ -142,6 +198,30 @@ class MainService : Service() {
       }
     }
     return null
+  }
+
+  private fun CameraManager.addAvailabilityCallback() {
+    val featureCameraExternal = packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_EXTERNAL)
+    Log.d("MAIN_SERVICE", "featureCameraExternal: $featureCameraExternal")
+
+    Log.d("MAIN_SERVICE", "Available cameras:")
+    cameraIdList.forEachIndexed { index, cameraId ->
+      val cameraCharacteristics = getCameraCharacteristics(cameraId)
+      Log.d("MAIN_SERVICE", "Available camera[${index}]: Lens facing: ${cameraCharacteristics.get(CameraCharacteristics.LENS_FACING)}")
+    }
+
+    val availabilityCallback = object : CameraManager.AvailabilityCallback() {
+      override fun onCameraAvailable(cameraId: String) {
+        super.onCameraAvailable(cameraId)
+        Log.d("MAIN_SERVICE", "Camera available :) cameraId: $cameraId")
+      }
+
+      override fun onCameraUnavailable(cameraId: String) {
+        super.onCameraUnavailable(cameraId)
+        Log.d("MAIN_SERVICE", "Camera unavailable :( cameraId: $cameraId")
+      }
+    }
+    registerAvailabilityCallback(availabilityCallback, backgroundHandler)
   }
 
   private fun stop() {

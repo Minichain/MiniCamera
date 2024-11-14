@@ -39,8 +39,19 @@
     <service
       android:name=".MainService"
       android:enabled="true"
-      android:foregroundServiceType="camera|microphone"
-      android:exported="false" />
+      android:foregroundServiceType="camera"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+        <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
+      </intent-filter>
+      <meta-data
+        android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+        android:resource="@xml/usb_device_filter" />
+      <meta-data
+        android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
+        android:resource="@xml/usb_device_filter" />
+    </service>
 
   </application>
 
