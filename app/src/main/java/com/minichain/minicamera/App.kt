@@ -10,12 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class App : Application() {
 
-  companion object {
-    val VIDEO_RESOLUTION = VideoResolution.RESOLUTION_640_480
-  }
-
   val cameraPreview: SurfaceTexture = SurfaceTexture(false).apply {
-    setDefaultBufferSize(VIDEO_RESOLUTION.width, VIDEO_RESOLUTION.height)
+    setDefaultBufferSize(Parameters.VIDEO_RESOLUTION.width, Parameters.VIDEO_RESOLUTION.height)
   }
 
   val videoStatus = MutableStateFlow(VideoStatus.Stopped)

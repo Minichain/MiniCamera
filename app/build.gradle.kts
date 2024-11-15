@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.android)
@@ -19,6 +21,14 @@ android {
     vectorDrawables {
       useSupportLibrary = true
     }
+
+    val properties = Properties()
+    properties.load(project.rootProject.file("local.properties").inputStream())
+    buildConfigField("String", "awsAccessKey", "\"${properties.getProperty("awsAccessKey")}\"")
+    buildConfigField("String", "awsSecretKey", "\"${properties.getProperty("awsSecretKey")}\"")
+    buildConfigField("String", "sessionToken", "\"${properties.getProperty("sessionToken")}\"")
+    buildConfigField("String", "streamName", "\"${properties.getProperty("streamName")}\"")
+    buildConfigField("String", "regionName", "\"${properties.getProperty("regionName")}\"")
   }
 
   buildTypes {
@@ -38,6 +48,7 @@ android {
   }
 
   buildFeatures {
+    buildConfig = true
     compose = true
   }
 

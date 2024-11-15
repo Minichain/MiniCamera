@@ -7,11 +7,6 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import com.amazonaws.auth.BasicSessionCredentials
-import com.amazonaws.internal.StaticCredentialsProvider
-import com.amazonaws.kinesisvideo.client.KinesisVideoClient
-import com.amazonaws.mobileconnectors.kinesisvideo.client.CustomKinesisVideoAndroidClientFactory
-import com.amazonaws.regions.Regions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,10 +16,10 @@ import kotlinx.coroutines.launch
 
 class MainService : Service() {
 
+  private var customMediaCodec: CustomMediaCodec? = null
   private var cameraManager: CameraManager? = null
+  private var videoStreamingManager: VideoStreamingManager? = null
   private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-  private var kinesisVideoClient: KinesisVideoClient? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
@@ -39,38 +34,47 @@ class MainService : Service() {
 
     startForeground()
 
-    cameraManager = CameraManager(
-      context = applicationContext,
-      preview = (application as App).cameraPreview,
-      onVideoStatusUpdated = { status ->
-        (application as App).videoStatus.tryEmit(status)
-      }
-    )
-
-    coroutineScope.startListeningToStartStopVideoRequests()
-
     coroutineScope.launch {
-      val credentialsProvider = StaticCredentialsProvider(
-        BasicSessionCredentials(
-          "",
-          "",
-          ""
-        )
+
+      customMediaCodec = CustomMediaCodec()
+
+      cameraManager = CameraManager(
+        context = applicationContext,
+        preview = (application as App).cameraPreview,
+        onFrameAvailable = { frame ->
+          customMediaCodec?.encodeVideo(
+            rawData = frame,
+            onVideoEncoded = { bufferInfo, outData ->
+              videoStreamingManager?.putFrame(bufferInfo, outData)
+            }
+          )
+        }
       )
-      kinesisVideoClient = CustomKinesisVideoAndroidClientFactory.createKinesisVideoClient(
-        application,
-        Regions.EU_WEST_1,
-        credentialsProvider
+
+      videoStreamingManager = VideoStreamingManager(
+        context = applicationContext
       )
+
+      startListeningToStartStopVideoStreamRequests()
     }
   }
 
-  private fun CoroutineScope.startListeningToStartStopVideoRequests() {
+  private fun CoroutineScope.startListeningToStartStopVideoStreamRequests() {
     (application as App).videoStatus
       .onEach { status ->
         when (status) {
-          VideoStatus.Starting -> cameraManager?.openCameraAndStartSession()
-          VideoStatus.Stopping -> cameraManager?.stopSessionAndCloseCamera()
+          VideoStatus.Starting -> {
+            customMediaCodec?.start()
+            cameraManager?.openCameraAndStartSession()
+            videoStreamingManager?.startVideoStream()
+            (application as App).videoStatus.tryEmit(VideoStatus.Started)
+          }
+          VideoStatus.Stopping -> {
+            videoStreamingManager?.stopVideoStream()
+            cameraManager?.stopSessionAndCloseCamera()
+            customMediaCodec?.stop()
+            (application as App).videoStatus.tryEmit(VideoStatus.Stopped)
+          }
           else -> { /* Nothing */ }
         }
       }

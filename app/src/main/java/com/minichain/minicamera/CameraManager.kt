@@ -25,7 +25,7 @@ import androidx.core.app.ActivityCompat
 class CameraManager(
   private val context: Context,
   private val preview: SurfaceTexture,
-  val onVideoStatusUpdated: (videoStatus: VideoStatus) -> Unit
+  val onFrameAvailable: (frame: ByteArray) -> Unit
 ) {
 
   private lateinit var backgroundHandlerThread: HandlerThread
@@ -34,7 +34,10 @@ class CameraManager(
   private var camera: CameraDevice? = null
   private var session: CameraCaptureSession? = null
   private var imageReader: ImageReader = ImageReader.newInstance(
-    App.VIDEO_RESOLUTION.width, App.VIDEO_RESOLUTION.height, ImageFormat.YUV_420_888, 1
+    Parameters.VIDEO_RESOLUTION.width,
+    Parameters.VIDEO_RESOLUTION.height,
+    ImageFormat.YUV_420_888,
+    1
   )
 
   fun openCameraAndStartSession() {
@@ -45,16 +48,25 @@ class CameraManager(
 
     val cameraManager: CameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     cameraManager.addAvailabilityCallback()
-    imageReader.apply {
+
+    ImageReader.newInstance(
+      Parameters.VIDEO_RESOLUTION.width,
+      Parameters.VIDEO_RESOLUTION.height,
+      ImageFormat.YUV_420_888,
+      1
+    ).apply {
+      imageReader = this
       setOnImageAvailableListener(
         {
           val frame = it.acquireLatestImage()
           Log.d("MAIN_SERVICE", "Frame available!")
+          onFrameAvailable(ImageUtils.yuv420888toNV21(frame))
           frame.close()
         },
         backgroundHandler
       )
     }
+
     cameraManager.getBackCameraId()?.let { backCameraId ->
       val cameraStateCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(camera: CameraDevice) {
@@ -93,7 +105,6 @@ class CameraManager(
         captureRequest.addTarget(surface1)
         captureRequest.addTarget(surface2)
         session.setRepeatingRequest(captureRequest.build(), null, null)
-        onVideoStatusUpdated(VideoStatus.Started)
       }
 
       override fun onConfigureFailed(session: CameraCaptureSession) {
@@ -186,6 +197,5 @@ class CameraManager(
     camera?.close()
     backgroundHandlerThread.quitSafely()
     backgroundHandlerThread.join()
-    onVideoStatusUpdated(VideoStatus.Stopped)
   }
 }
