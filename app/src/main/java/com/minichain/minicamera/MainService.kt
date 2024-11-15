@@ -26,6 +26,8 @@ import android.view.Surface
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.amazonaws.auth.BasicSessionCredentials
+import com.amazonaws.internal.StaticCredentialsProvider
 import com.amazonaws.kinesisvideo.client.KinesisVideoClient
 import com.amazonaws.mobile.client.AWSMobileClient
 import com.amazonaws.mobileconnectors.kinesisvideo.client.CustomKinesisVideoAndroidClientFactory
@@ -76,10 +78,19 @@ class MainService : Service() {
     coroutineScope.startListeningToStartStopVideoRequests()
 
     coroutineScope.launch {
+
+      val credentialsProvider = StaticCredentialsProvider(
+        BasicSessionCredentials(
+          "",
+          "",
+          ""
+        )
+      )
+
       kinesisVideoClient = CustomKinesisVideoAndroidClientFactory.createKinesisVideoClient(
         application,
         Regions.EU_WEST_1,
-        AWSMobileClient.getInstance() //TODO <- This can be done differently
+        credentialsProvider
       )
     }
   }

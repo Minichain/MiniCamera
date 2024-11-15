@@ -1,15 +1,20 @@
 plugins {
-  alias(libs.plugins.android.application)
+  alias(libs.plugins.android.library)
   alias(libs.plugins.kotlin.android)
+  alias(libs.plugins.kotlin.kapt)
 }
 
 android {
   namespace = "com.amazonaws.kinesisvideo"
   compileSdk = 34
 
+  defaultConfig {
+    minSdk = 30
+  }
+
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
   }
 
   buildTypes {
@@ -20,18 +25,19 @@ android {
   }
 
   kotlinOptions {
-    jvmTarget = "1.8"
-  }
-
-  defaultConfig {
-    minSdk = 30
-    targetSdk = 34
+    jvmTarget = "17"
   }
 
   packaging {
-    resources {
-      excludes += "/META-INF/DEPENDENCIES"
-    }
+    resources.excludes.add("META-INF/DEPENDENCIES")
+    resources.excludes.add("META-INF/LICENSE")
+    resources.excludes.add("META-INF/LICENSE.txt")
+    resources.excludes.add("META-INF/license.txt")
+    resources.excludes.add("META-INF/NOTICE")
+    resources.excludes.add("META-INF/NOTICE.txt")
+    resources.excludes.add("META-INF/notice.txt")
+    resources.excludes.add("META-INF/ASL2.0")
+    resources.excludes.add("META-INF/*.kotlin_module")
   }
 }
 
